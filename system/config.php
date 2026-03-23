@@ -1,4 +1,7 @@
 <?php
+define('ROOTPATH', str_replace("/system","",dirname(__FILE__) . "/"));
+define('WWWPATH', "https://********/"); // with trailing slash
+
 $host = '********';
 $db   = '********';
 $user = '********';
