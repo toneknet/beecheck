@@ -20,7 +20,7 @@ foreach ($pages as $key => $value) {
 
 // SAFECHECK
 if (empty($page) || !in_array($page,$pages)) {
-  $page = 'list';
+  $page = 'dashboard';
 }
 
 if(!require_login2()) {
