@@ -1,0 +1,11 @@
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L,QSA]
+#ErrorDocument 500 /tpl/500.html
+
+# Enable PHP error logging to file
+php_flag  log_errors on
+<Files error.log>
+Deny from all
+</Files>
