@@ -29,3 +29,22 @@ function url($path = "") {
 function returnBtn($path = '', $caption = "Tillbaka") {
   return "<a href='" . url($path) . "' class='returnBtn'>&#x21A9; {$caption}</a>";
 }
+
+function returnBtnHistory($caption = "Tillbaka") {
+  return "<a href='javascript:history.back()' class='returnBtn'>&#x21A9; {$caption}</a>";
+}
+
+function noAccess() {
+  _header();
+  ?>
+  <main class="app-main">
+     <div class="card apiary-card">
+        <h1 class="card-title">NEKAD ÅTKOMST!</h1>
+        <p class="card-subtitle">Du har inte tillgång till denna sida. Eller så har något gått fel. Återkommer problemet så får du ta kontakt med administratören för vidare åtgärd.</p>
+        <?= returnBtnHistory() ?>
+     </div>
+  </main>
+  <?php
+  _footer();
+  exit;
+}

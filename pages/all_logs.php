@@ -8,24 +8,40 @@ $filter_hive_id = isset($_GET['hive_id']) ? (int)$_GET['hive_id'] : 0;
 $sort = $_GET['sort'] ?? 'date_desc'; // standard: senaste först
 
 // Hämta bigårdar för filter-dropdown
-$apiary_sql = "SELECT id, name FROM bi_apiaries WHERE user_id = ? AND deleted=0 ORDER BY name";
+// $apiary_sql = "SELECT id, name FROM bi_apiaries WHERE user_id = ? AND deleted=0 ORDER BY name";
+$apiary_sql = "SELECT a.id, a.name FROM bi_apiaries as a
+LEFT JOIN bi_apiary_shares s 
+    ON s.apiary_id = a.id AND s.user_id = ?
+WHERE (a.user_id = ? OR s.id IS NOT NULL) AND a.deleted=0 ORDER BY a.name";
+
 $st_api = $mysqli->prepare($apiary_sql);
-$st_api->bind_param('i', $uid);
+// $st_api->bind_param('i', $uid);
+$st_api->bind_param('ii', $uid, $uid);
 $st_api->execute();
 $apiary_res = $st_api->get_result();
 $apiaries = $apiary_res->fetch_all(MYSQLI_ASSOC);
 $st_api->close();
 
 // Hämta bikupor för filter-dropdown (alla användarens kupor)
+// $hive_sql = "
+//     SELECT h.id, h.name, a.name AS apiary_name, h.apiary_id 
+//     FROM bi_hives h 
+//     JOIN bi_apiaries a ON h.apiary_id = a.id 
+//     WHERE a.user_id = ? 
+//     ORDER BY a.name, h.name
+// ";
 $hive_sql = "
     SELECT h.id, h.name, a.name AS apiary_name, h.apiary_id 
     FROM bi_hives h 
     JOIN bi_apiaries a ON h.apiary_id = a.id 
-    WHERE a.user_id = ? 
+    LEFT JOIN bi_apiary_shares s 
+    ON s.apiary_id = a.id AND s.user_id = ?
+    WHERE (a.user_id = ? OR s.id IS NOT NULL) AND a.deleted=0 
     ORDER BY a.name, h.name
 ";
 $st_hive = $mysqli->prepare($hive_sql);
-$st_hive->bind_param('i', $uid);
+// $st_hive->bind_param('i', $uid);
+$st_hive->bind_param('ii', $uid, $uid);
 $st_hive->execute();
 $hive_res = $st_hive->get_result();
 $hives = $hive_res->fetch_all(MYSQLI_ASSOC);
@@ -111,6 +127,33 @@ $st_hive->close();
 //     $types   .= 'i';
 // }
 
+// $sql = "
+// SELECT 
+//     l.id, 
+//     l.log_date,
+//     l.queen,
+//     l.eggs,
+//     l.open_brood,
+//     l.capped_brood,
+//     l.swarm_cells,
+//     l.temperament,
+//     l.strength,
+//     l.box1_brood_frames,
+//     l.box2_brood_frames,
+//     l.boxes_swapped,
+//     l.comment, 
+//     l.created_at,
+//     h.name AS hive_name, 
+//     a.name AS apiary_name, 
+//     u.fullname AS created_by_name,
+//     h.apiary_id AS apiary_id
+// FROM bi_hive_logs l
+// JOIN bi_hives h ON l.hive_id = h.id
+// JOIN bi_apiaries a ON h.apiary_id = a.id
+// LEFT JOIN bi_users u ON l.created_by = u.id
+// WHERE a.user_id = ? AND l.deleted=0 AND h.deleted=0 AND a.deleted=0 AND u.deleted=0  
+// ";
+
 $sql = "
 SELECT 
     l.id, 
@@ -135,8 +178,10 @@ FROM bi_hive_logs l
 JOIN bi_hives h ON l.hive_id = h.id
 JOIN bi_apiaries a ON h.apiary_id = a.id
 LEFT JOIN bi_users u ON l.created_by = u.id
-WHERE a.user_id = ? AND l.deleted=0 AND h.deleted=0 AND a.deleted=0 AND u.deleted=0  
+LEFT JOIN bi_apiary_shares s ON s.apiary_id = a.id AND s.user_id = ? AND s.deleted=0
+WHERE (a.user_id = ? OR s.id IS NOT NULL) AND l.deleted=0 AND h.deleted=0 AND a.deleted=0 AND u.deleted=0  
 ";
+
 
 /*
 ,
@@ -146,8 +191,8 @@ WHERE a.user_id = ? AND l.deleted=0 AND h.deleted=0 AND a.deleted=0 AND u.delete
     u.deleted as udel
 */
 
-$params = [$uid];
-$types = 'i';
+$params = [$uid,$uid];
+$types = 'ii';
 
 if ($filter_apiary_id > 0) {
     $sql .= " AND a.id = ?";
@@ -194,7 +239,7 @@ $stmt->close();
 
 
 
-// hjälp-funktioner (kan kopieras från hive_logs.php)
+// hjälp-funktioner (kan kopieras från bi_hive_logs.php)
 function temper_icon($t) {
     if ($t == 1) return '😞';
     if ($t == 2) return '😐';
@@ -210,7 +255,7 @@ function strength_icon($s) {
 _header();
 ?>
     <main class="app-main">
-        <?= returnBtn('apiaries/',"Tillbaka till val av Bigård") ?>
+        <?= returnBtn('apiaries',"Tillbaka till val av Bigård") ?>
 
 <div class="card">
     <div class="card-header">

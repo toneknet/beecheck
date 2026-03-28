@@ -9,10 +9,18 @@ $uid = current_user_id();
 $hive_id = (int)($url[2] ?? 0);
 
 // Kontrollera att kupan tillhör inloggad användare
-$sql = "SELECT h.id, h.name, a.name AS apiary_name, apiary_id 
-        FROM bi_hives h
-        JOIN bi_apiaries a ON h.apiary_id = a.id
-        WHERE h.id = ? AND a.user_id = ? AND h.deleted=0 AND a.deleted=0";
+// $sql = "SELECT h.id, h.name, a.name AS apiary_name, apiary_id 
+//         FROM bi_hives h
+//         JOIN bi_apiaries a ON h.apiary_id = a.id
+//         WHERE h.id = ? AND a.user_id = ? AND h.deleted=0 AND a.deleted=0";
+$sql = "SELECT h.id, h.name, a.name AS apiary_name, h.apiary_id 
+        FROM bi_apiaries a
+        LEFT JOIN bi_hives h ON a.id = h.apiary_id
+        LEFT JOIN bi_apiary_shares s 
+            ON s.apiary_id = a.id AND s.user_id = ?
+        WHERE (a.user_id = ? OR s.id IS NOT NULL)
+            AND h.deleted=0 AND a.deleted=0";
+
 $stmt = $mysqli->prepare($sql);
 $stmt->bind_param('ii', $hive_id, $uid);
 $stmt->execute();
@@ -33,6 +41,8 @@ if (!$apiary_id) {
 // Hantera nytt logg‑inlägg
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $queen = isset($_POST['queen']) ? 1 : 0;
+    $queen_color = isset($_POST['queen_color']) ? (int) $_POST['queen_color'] : 0;
+
     $eggs = isset($_POST['eggs']) ? 1 : 0;
     $open_brood = isset($_POST['open_brood']) ? 1 : 0;
     $capped_brood = isset($_POST['capped_brood']) ? 1 : 0;
@@ -52,15 +62,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $comment = trim($_POST['comment'] ?? '');
 
     $stmt = $mysqli->prepare("INSERT INTO bi_hive_logs
-        (hive_id, queen, eggs, open_brood, capped_brood, swarm_cells,
+        (hive_id, queen, queen_color, eggs, open_brood, capped_brood, swarm_cells,
         temperament, strength,
         box1_brood_frames, box2_brood_frames, boxes_swapped,
         comment,
         log_date, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param(
-        'iiiiiiiiiiissi',
-        $hive_id, $queen, $eggs, $open_brood, $capped_brood, $swarm_cells,
+        'iiiiiiiiiiiissi',
+        $hive_id, $queen, $queen_color, $eggs, $open_brood, $capped_brood, $swarm_cells,
         $temperament, $strength,
         $box1, $box2, $boxes_swapped,
         $comment,
@@ -97,6 +107,55 @@ function strength_icon($s) {
     if ($s == 3) return '😊';
     return '😐';
 }
+
+// Queen Color
+$arrC = array(
+    '0' => [
+        'caption' => 'Ej angivet',
+        'bg_color' => '',
+        'color' => '',
+        'class' => 'button0',
+        'checked' => true
+    ],
+    '5' => [
+        'caption' => 'Blå (0/5)',
+        'bg_color' => 'blue',
+        'color' => '',
+        'class' => 'button2',
+        'checked' => false
+    ],                                
+    '1' => [
+        'caption' => 'Vit (1/6)',
+        'bg_color' => '#fff',
+        'color' => '',
+        'class' => 'button4',
+        'checked' => false
+    ],
+    '2' => [
+        'caption' => 'Gul (2/7)',
+        'bg_color' => 'yellow',
+        'color' => '',
+        'class' => 'button5',
+        'checked' => false
+    ],
+    '3' => [
+        'caption' => 'Röd (3/8)',
+        'bg_color' => 'red',
+        'color' => '',
+        'class' => 'button3',
+        'checked' => false
+    ],
+    '4' => [
+        'caption' => 'Grön (4/9)',
+        'bg_color' => 'green',
+        'color' => '',
+        'class' => 'button1',
+        'checked' => false
+    ],
+);
+
+
+
 _header();
 ?>
     <main class="app-main">
@@ -110,7 +169,26 @@ _header();
                     <form method="post" >
                         <fieldset>
                             <legend>Observationer</legend>
-                            <label><input type="checkbox" name="queen"> Drottning</label>
+                            <!-- 0: Blå, 1: Vit, 2: Gul, 3: Röd, 4: Grön  -->
+                            <label><input type="checkbox" name="queen" id="queen"> Drottning</label>
+                            <div id="queen_color">
+                                <b>Färg:</b>
+                                <div class="queen_color_container">
+                                    <?php foreach ($arrC as $key => $value) {
+                                        print "<label style='background-color:{$value['bg_color']};' class='queen_button " . $value['class'] . "'>"; // for=\"\"
+                                        print "<input type=\"radio\" name=\"queen_color\" id=\"\" value=\"{$key}\" ";
+                                        print ($value['checked']) ? " checked " : "";
+                                        print ">\n";
+                                        print $value['caption'];
+                                        print "</label>";
+                                    }
+                                    ?>
+                                </div>
+                            </div>
+
+                            <!-- <label>
+                                <input type="checkbox" name="queen" id="queen"> Drottning
+                            </label> -->
                             <label><input type="checkbox" name="eggs"> Ägg</label>
                             <label><input type="checkbox" name="open_brood"> Öppet yngel</label>
                             <label><input type="checkbox" name="capped_brood"> Täckt yngel</label>
@@ -277,6 +355,8 @@ _header();
                                 <td><?= htmlspecialchars($log['log_date']) ?></td>
                                 <td>
                                     <?= $log['queen'] ? 'Drottning ' : '' ?>
+                                    <?= $log['queen_color'] ? '<p style="width:.5rem;height:.5rem;border-radius:50%;background-color:' . $arrC[$log['queen_color']]['bg_color'] . ';"></p> ' : '' ?>
+                                    
                                     <?= $log['eggs'] ? 'Ägg ' : '' ?>
                                     <?= $log['open_brood'] ? 'Öppet ' : '' ?>
                                     <?= $log['capped_brood'] ? 'Täckt ' : '' ?>

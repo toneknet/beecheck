@@ -12,18 +12,25 @@ if (isset($_POST['action']) && $_POST['action'] === 'multi_comment') {
     if ($comment !== '' && !empty($hive_ids)) {
         // Filtrera till heltal
         $hive_ids = array_map('intval', $hive_ids);
-
+        pre($_POST);
         // Hämta bara de kupor som tillhör inloggad användare (säkerhet)
         if ($hive_ids) {
             $placeholders = implode(',', array_fill(0, count($hive_ids), '?'));
-            $types = str_repeat('i', count($hive_ids)) . 'i';
+            $types = 'i'. str_repeat('i', count($hive_ids)) . 'i';
             $params = $hive_ids;
             $params[] = $uid;
+            array_unshift($params, $uid);
 
             $sql = "SELECT h.id
                     FROM bi_hives h
                     JOIN bi_apiaries a ON h.apiary_id = a.id
-                    WHERE h.id IN ($placeholders) AND a.user_id = ?";
+                    LEFT JOIN bi_apiary_shares s ON s.apiary_id = a.id AND s.user_id = ? AND s.deleted=0
+                    WHERE h.id IN ($placeholders) AND (a.user_id = ? OR s.id IS NOT NULL)";
+
+            // $sql = "SELECT h.id
+            //         FROM bi_hives h
+            //         JOIN bi_apiaries a ON h.apiary_id = a.id
+            //         WHERE h.id IN ($placeholders) AND a.user_id = ?";
             $stmt = $mysqli->prepare($sql);
             $stmt->bind_param($types, ...$params);
             $stmt->execute();
@@ -102,8 +109,16 @@ $sql = "SELECT a.id, a.name, a.location,
                h.id as hive_id, h.name as hive_name
         FROM bi_apiaries a
         LEFT JOIN bi_hives h ON a.id = h.apiary_id
-        WHERE a.user_id = ? AND a.id = $apiary_id AND a.deleted=0 AND h.deleted=0
+        LEFT JOIN bi_apiary_shares s 
+            ON s.apiary_id = a.id AND s.user_id = ?
+        WHERE (a.user_id = ? OR s.id IS NOT NULL) AND a.id = $apiary_id AND a.deleted=0 AND h.deleted=0
         ORDER BY a.name, h.name";
+// $sql = "SELECT a.id, a.name, a.location,
+//                h.id as hive_id, h.name as hive_name
+//         FROM bi_apiaries a
+//         LEFT JOIN bi_hives h ON a.id = h.apiary_id
+//         WHERE a.user_id = ? AND a.id = $apiary_id AND a.deleted=0 AND h.deleted=0
+//         ORDER BY a.name, h.name";        
 // $sql = "SELECT a.id, a.name, a.location,
 //                h.id as hive_id, h.name as hive_name
 //         FROM bi_apiaries a
@@ -111,7 +126,8 @@ $sql = "SELECT a.id, a.name, a.location,
 //         WHERE a.user_id = ?
 //         ORDER BY a.name, h.name";
 $stmt = $mysqli->prepare($sql);
-$stmt->bind_param('i', $uid);
+// $stmt->bind_param('i', $uid);
+$stmt->bind_param('ii', $uid, $uid);
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
@@ -135,7 +151,7 @@ $stmt->close();
 _header();
 ?>
     <main class="app-main">
-            <?= returnBtn('apiaries/',"Tillbaka till val av Bigård") ?>
+            <?= returnBtn('apiaries',"Tillbaka till val av Bigård") ?>
 
             <!-- Ny bigård -->
             <details class="card">
